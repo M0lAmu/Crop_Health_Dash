@@ -1,0 +1,510 @@
+# Processing Sentinel-2 data for NDVI
+pip install rasterio numpy matplotlib
+
+
+## Ensure you’ve downloaded Sentinel-2 Level-2A imagery (BOA) and have the paths for B4 (Red) and B8 (NIR) bands.
+import rasterio
+import numpy as np
+import matplotlib.pyplot as plt
+
+# File paths for Red and NIR bands
+red_band_path = "C:/Users/thato/OneDrive/Documents/MolamuPlaysWithCode/Copernicus images/S2B_MSIL2A_20231202T075209_N0509_R135_T35JPM_20231202T103005.SAFE/GRANULE/L2A_T35JPM_A035196_20231202T081140/IMG_DATA/R10m/T35JPM_20231202T075209_B04_10m.jp2"    #"path/to/B4.tif"
+nir_band_path = "C:/Users/thato/OneDrive/Documents/MolamuPlaysWithCode/Copernicus images/S2B_MSIL2A_20231202T075209_N0509_R135_T35JPM_20231202T103005.SAFE/GRANULE/L2A_T35JPM_A035196_20231202T081140/IMG_DATA/R10m/T35JPM_20231202T075209_B08_10m.jp2"    #"path/to/B8.tif"
+
+# Load bands
+with rasterio.open(red_band_path) as red_src, rasterio.open(nir_band_path) as nir_src:
+    red = red_src.read(1)
+    nir = nir_src.read(1)
+
+ Calculate NDVI
+ndvi = (nir - red) / (nir + red)
+
+
+# Save NDVI as GeoTIFF
+output_path = "C:/Users/thato/OneDrive/Documents/MolamuPlaysWithCode/Copernicus images"
+with rasterio.open(
+    output_path, 'w',
+    driver='GTiff',
+    height=ndvi.shape[0],
+    width=ndvi.shape[1],
+    count=1,
+    dtype=ndvi.dtype,
+    crs=red_src.crs,
+    transform=red_src.transform
+) as dst:
+    dst.write(ndvi, 1)
+
+# Plot NDVI
+plt.imshow(ndvi, cmap="RdYlGn", vmin=-1, vmax=1)
+plt.colorbar(label="NDVI")
+plt.title("NDVI Map")
+plt.show()
+
+
+#### Automating NDVI calculations over time - for each Sentinel-2 dataset downlaoded
+
+#import rasterio
+#import numpy as np
+#import os
+#import pandas as pd
+
+# Directory containing Sentinel-2 bands
+#base_dir = "path/to/sentinel2_data"
+#output_dir = "path/to/output_ndvi"
+#os.makedirs(output_dir, exist_ok=True)
+
+# Function to calculate NDVI
+#def calculate_ndvi(red_band, nir_band, output_path):
+#    with rasterio.open(red_band) as red_src, rasterio.open(nir_band) as nir_src:
+#        red = red_src.read(1)
+#        nir = nir_src.read(1)
+
+#        # NDVI calculation
+#        ndvi = (nir - red) / (nir + red)
+#
+#        # Save NDVI to GeoTIFF
+#        with rasterio.open(
+#            output_path, "w",
+#            driver="GTiff",
+#            height=ndvi.shape[0],
+#            width=ndvi.shape[1],
+#            count=1,
+#            dtype=ndvi.dtype,
+#            crs=red_src.crs,
+#            transform=red_src.transform
+#        ) as dst:
+#            dst.write(ndvi, 1)
+
+## Loop through available dates
+#results = []
+#for date_dir in os.listdir(base_dir):
+#    date_path = os.path.join(base_dir, date_dir)
+#    if os.path.isdir(date_path):
+#        red_band = os.path.join(date_path, "B4.tif")  # Adjust band naming as needed
+#        nir_band = os.path.join(date_path, "B8.tif")
+#        output_path = os.path.join(output_dir, f"ndvi_{date_dir}.tif")
+
+#        if os.path.exists(red_band) and os.path.exists(nir_band):
+#            calculate_ndvi(red_band, nir_band, output_path)
+#            results.append({"date": date_dir, "ndvi_path": output_path})
+
+## Save NDVI file paths and dates for reference
+#ndvi_df = pd.DataFrame(results)
+#ndvi_df.to_csv(os.path.join(output_dir, "ndvi_metadata.csv"), index=False)
+
+####
+
+
+
+# Automating Weather data collection
+pip install requests pandas
+
+
+## fetch weather data (for list of locations and times)
+import requests
+import pandas as pd
+import time
+
+# OpenWeatherMap API key and base URL
+api_key = 7e9c821c9ff3b3d440998b4cde491ef2   #"your_api_key"
+base_url = "https://home.openweathermap.org/api_keys"    #"http://api.openweathermap.org/data/2.5/weather"
+
+# Define locations
+locations = [
+    {"lat": -25.74339, "lon": 28.25557},  # Replace with your coordinates {"type":"Polygon","coordinates":[[[28.25557,-25.753092],[28.25557,-25.74339],[28.266127,-25.74339],[28.266127,-25.753092],[28.25557,-25.753092]]]}
+]
+
+# Fetch data for each location
+weather_data = []
+for location in locations:
+    params = {
+        "lat": location["lat"],
+        "lon": location["lon"],
+        "appid": api_key,
+        "units": "metric"
+    }
+    response = requests.get(base_url, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        weather_data.append({
+            "Latitude": location["lat"],
+            "Longitude": location["lon"],
+            "Temperature (°C)": data['main']['temp'],
+            "Humidity (%)": data['main']['humidity'],
+            "VPD (kPa)": (100 - data['main']['humidity']) / 100 * 0.6108 * np.exp(
+                (17.27 * data['main']['temp']) / (data['main']['temp'] + 237.3)
+            )
+        })
+    time.sleep(1)  # Avoid exceeding API rate limits
+
+# Create a DataFrame
+df_weather = pd.DataFrame(weather_data)
+print(df_weather)
+
+# Save to CSV
+df_weather.to_csv("weather_data.csv", index=False)
+
+
+# Integration (in df for dashboard)
+
+import geopandas as gpd
+import pandas as pd
+
+# Load NDVI as GeoDataFrame
+ndvi_gdf = gpd.read_file("path/to/ndvi.tif")
+
+# Load Weather Data
+weather_df = pd.read_csv("weather_data.csv")
+
+# Merge NDVI and Weather Data (example for closest weather point)
+merged_data = ndvi_gdf.merge(weather_df, how="cross")
+merged_data["Distance"] = ((merged_data["Latitude"] - lat_ndvi)**2 + (merged_data["Longitude"] - lon_ndvi)**2)**0.5
+merged_data = merged_data.loc[merged_data.groupby("Pixel")["Distance"].idxmin()]
+
+print(merged_data.head())
+
+
+# Visualise with 'Streamlit'
+pip install streamlit
+
+
+import streamlit as st
+import geopandas as gpd
+import pandas as pd
+import folium
+from streamlit_folium import st_folium
+
+st.title("Crop Health Dashboard")
+
+# Load NDVI and Weather Data
+ndvi_path = "path/to/ndvi.tif"
+weather_path = "weather_data.csv"
+
+ndvi_gdf = gpd.read_file(ndvi_path)
+weather_df = pd.read_csv(weather_path)
+
+# Display NDVI Map
+m = folium.Map(location=[-25.7459, 28.1878], zoom_start=12)
+folium.Choropleth(
+    geo_data=ndvi_gdf,
+    name="NDVI",
+    data=ndvi_gdf,
+    columns=["Pixel", "NDVI"],
+    key_on="feature.properties.Pixel",
+    fill_color="YlGn",
+    fill_opacity=0.7,
+    line_opacity=0.2
+).add_to(m)
+
+st_folium(m, width=700, height=500)
+
+# Display Weather Data
+st.subheader("Weather Information")
+st.table(weather_df)
+
+
+
+
+#### Interactive Dashboard with animations
+## Time series plots
+pip install plotly
+
+import plotly.express as px
+import pandas as pd
+
+# Load weather data
+weather_df = pd.read_csv("historical_weather.csv")
+weather_df["datetime"] = pd.to_datetime(weather_df["dt"], unit="s")
+
+# Plot temperature over time
+fig = px.line(
+    weather_df,
+    x="datetime",
+    y="temp",
+    title="Temperature Over Time",
+    labels={"datetime": "Date", "temp": "Temperature (°C)"}
+)
+fig.show()
+
+
+### - Animating NDVI changes over time
+
+import rasterio
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+
+# Load NDVI datasets
+ndvi_files = ["path/to/ndvi_2024-01-01.tif", "path/to/ndvi_2024-02-01.tif"]  # Replace with actual paths
+
+ndvi_data = []
+for file in ndvi_files:
+    with rasterio.open(file) as src:
+        ndvi_data.append(src.read(1))
+
+# Set up the figure
+fig, ax = plt.subplots()
+img = ax.imshow(ndvi_data[0], cmap="RdYlGn", vmin=-1, vmax=1)
+plt.colorbar(img, ax=ax, label="NDVI")
+
+# Animation function
+def update(frame):
+    img.set_data(ndvi_data[frame])
+    ax.set_title(f"NDVI Map - Frame {frame + 1}")
+
+ani = FuncAnimation(fig, update, frames=len(ndvi_data), repeat=True)
+plt.show()
+
+
+###  - combining NDVI-time-series and weather data into an interactive dashboard
+
+import streamlit as st
+import plotly.express as px
+import pandas as pd
+
+# Load data
+ndvi_timeseries = pd.read_csv("ndvi_timeseries.csv")  # NDVI over time
+weather_df = pd.read_csv("historical_weather.csv")
+
+# Plot NDVI over time
+st.title("Crop Health Dashboard")
+ndvi_fig = px.line(ndvi_timeseries, x="date", y="NDVI", title="NDVI Over Time")
+st.plotly_chart(ndvi_fig)
+
+# Plot weather trends
+weather_df["datetime"] = pd.to_datetime(weather_df["dt"], unit="s")
+temp_fig = px.line(weather_df, x="datetime", y="temp", title="Temperature Over Time")
+st.plotly_chart(temp_fig)
+
+
+
+
+
+
+## Run the app
+streamlit run app.py
+
+
+
+
+
+
+
+
+
+
+
+
+# Modify the app
+
+#### Modify app to allow filter NDVI data and weather trends
+###based on Date
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+# Load NDVI metadata
+ndvi_metadata = pd.read_csv("path/to/output_ndvi/ndvi_metadata.csv")
+
+# User input for date filtering
+st.title("NDVI and Weather Dashboard")
+selected_date = st.selectbox("Select Date", ndvi_metadata["date"].unique())
+
+# Load corresponding NDVI
+ndvi_file = ndvi_metadata.loc[ndvi_metadata["date"] == selected_date, "ndvi_path"].values[0]
+st.write(f"NDVI file for {selected_date}: {ndvi_file}")
+
+# (Optional) Display NDVI map or trends for the selected date
+# Add your NDVI visualization logic here
+
+###based on Location
+import geopandas as gpd
+
+# Load NDVI GeoTIFF as GeoDataFrame
+ndvi_gdf = gpd.read_file("path/to/ndvi_2024-01-01.tif")  # Example file
+
+# Filter by user-selected location
+locations = ndvi_gdf["location_column"].unique()  # Replace with actual location column
+selected_location = st.selectbox("Select Location", locations)
+filtered_data = ndvi_gdf[ndvi_gdf["location_column"] == selected_location]
+
+# Display filtered NDVI data
+st.write(f"NDVI for {selected_location}")
+st.map(filtered_data)
+
+
+#### Implementing spatial search with NDVI filtering
+
+## How Spatial Search Works
+##User Interaction:
+##The user draws a shape (e.g., a rectangle, circle, or polygon) or clicks on a point.
+#The app captures the coordinates of the drawn shape or the clicked location.
+#Backend Processing:
+#These coordinates are used to filter datasets based on their spatial location (e.g., NDVI values, weather stations, or farm plots within the selected area).
+#Results Visualization:
+#The filtered data is displayed on the map, in plots, or in tables, depending on the application.
+
+# Example use cases
+#1.Crop Health Monitoring: Draw a polygon over a farm plot to see NDVI trends for that area.
+#2.Weather Station Data: Click on a map to select the nearest weather station and view its data.
+#3.Irrigation Management: Define a region to analyze soil moisture or water stress data.
+
+pip install streamlit-folium geopandas rasterio shapely
+
+
+import streamlit as st
+from streamlit_folium import st_folium
+import folium
+from folium.plugins import Draw
+import geopandas as gpd
+import rasterio
+from rasterio.mask import mask
+from shapely.geometry import shape
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load NDVI GeoTIFF
+ndvi_file = "path/to/ndvi_2024-01-01.tif"
+
+# Function to clip NDVI based on user-drawn area
+def clip_ndvi(ndvi_path, user_geometry):
+    with rasterio.open(ndvi_path) as src:
+        # Clip NDVI using the user-drawn geometry
+        out_image, out_transform = mask(src, [user_geometry], crop=True)
+        out_meta = src.meta.copy()
+
+        # Update metadata for the clipped file
+        out_meta.update({
+            "driver": "GTiff",
+            "height": out_image.shape[1],
+            "width": out_image.shape[2],
+            "transform": out_transform
+        })
+
+        return out_image[0]  # Return NDVI array
+
+# Create the map
+m = folium.Map(location=[-25.7459, 28.1878], zoom_start=10)
+
+# Add a drawing tool
+Draw(export=True).add_to(m)
+
+# Display the map in Streamlit
+st.title("NDVI Spatial Search")
+st.write("Draw an area of interest on the map.")
+map_output = st_folium(m, width=700, height=500)
+
+# Process user input
+if map_output["last_active_drawing"]:
+    user_shape = map_output["last_active_drawing"]["geometry"]  # Capture user-drawn shape
+    st.write(f"Geometry: {user_shape}")
+
+    # Convert the drawn shape to a Shapely geometry
+    user_geometry = shape(user_shape)
+
+    # Clip NDVI using the user-defined area
+    st.write("Processing NDVI for the selected area...")
+    ndvi_data = clip_ndvi(ndvi_file, user_geometry)
+
+    # Display the clipped NDVI
+    st.write("Clipped NDVI Data:")
+    fig, ax = plt.subplots()
+    ndvi_plot = ax.imshow(ndvi_data, cmap="RdYlGn", vmin=-1, vmax=1)
+    plt.colorbar(ndvi_plot, ax=ax, label="NDVI")
+    st.pyplot(fig)
+
+
+
+## after loading and filtering weather data
+#visualise NDVI and weather trends - to see how they relate spatially and temprally
+
+import streamlit as st
+from streamlit_folium import st_folium
+import folium
+from folium.plugins import Draw
+import geopandas as gpd
+import rasterio
+from rasterio.mask import mask
+from shapely.geometry import shape
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from datetime import datetime
+
+# Example: Load weather data (can be replaced with real data source)
+weather_data = pd.read_csv("path/to/weather_data.csv")  # Replace with actual file
+weather_data['Date'] = pd.to_datetime(weather_data['Date'])  # Convert date column to datetime
+
+# Function to clip NDVI based on user-drawn area
+def clip_ndvi(ndvi_path, user_geometry):
+    with rasterio.open(ndvi_path) as src:
+        # Clip NDVI using the user-drawn geometry
+        out_image, out_transform = mask(src, [user_geometry], crop=True)
+        out_meta = src.meta.copy()
+
+        # Update metadata for the clipped file
+        out_meta.update({
+            "driver": "GTiff",
+            "height": out_image.shape[1],
+            "width": out_image.shape[2],
+            "transform": out_transform
+        })
+
+        return out_image[0]  # Return NDVI array
+
+# Create the map
+m = folium.Map(location=[-25.7459, 28.1878], zoom_start=10)
+
+# Add a drawing tool
+Draw(export=True).add_to(m)
+
+# Display the map in Streamlit
+st.title("NDVI and Weather Data Spatial Search")
+st.write("Draw an area of interest on the map.")
+map_output = st_folium(m, width=700, height=500)
+
+# Process user input
+if map_output["last_active_drawing"]:
+    user_shape = map_output["last_active_drawing"]["geometry"]  # Capture user-drawn shape
+    st.write(f"Geometry: {user_shape}")
+
+    # Convert the drawn shape to a Shapely geometry
+    user_geometry = shape(user_shape)
+
+    # Clip NDVI using the user-defined area
+    st.write("Processing NDVI for the selected area...")
+    ndvi_data = clip_ndvi("path/to/ndvi_2024-01-01.tif", user_geometry)
+
+    # Display the clipped NDVI
+    st.write("Clipped NDVI Data:")
+    fig, ax = plt.subplots()
+    ndvi_plot = ax.imshow(ndvi_data, cmap="RdYlGn", vmin=-1, vmax=1)
+    plt.colorbar(ndvi_plot, ax=ax, label="NDVI")
+    st.pyplot(fig)
+
+    # Filter weather data based on date and location
+    selected_location = st.selectbox("Select Location", weather_data['Location'].unique())
+    filtered_weather_data = weather_data[weather_data['Location'] == selected_location]
+
+    # Display weather trends
+    st.write(f"Weather data for {selected_location}:")
+    st.write(filtered_weather_data)
+
+    # Plot Weather Trends (Temperature, Precipitation)
+    st.write("Weather Trends:")
+    fig, ax = plt.subplots()
+    ax.plot(filtered_weather_data['Date'], filtered_weather_data['Temperature (°C)'], label="Temperature (°C)", color="tab:blue")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Temperature (°C)", color="tab:blue")
+    
+    ax2 = ax.twinx()
+    ax2.plot(filtered_weather_data['Date'], filtered_weather_data['Precipitation (mm)'], label="Precipitation (mm)", color="tab:green")
+    ax2.set_ylabel("Precipitation (mm)", color="tab:green")
+    
+    ax.tick_params(axis='y', labelcolor="tab:blue")
+    ax2.tick_params(axis='y', labelcolor="tab:green")
+    
+    plt.title(f"Weather Trends for {selected_location}")
+    st.pyplot(fig)
+
+    # Optionally, you can also calculate NDVI statistics or correlation with weather data here

@@ -1,0 +1,67 @@
+# For bulk downloads - automating Sentinel-2 data downloads
+pip install sentinelsat
+
+from sentinelsat import SentinelAPI, geojson_to_wkt
+from datetime import date
+
+# Sentinel API credentials
+user = "your_username"
+password = "your_password"
+api = SentinelAPI(user, password, "https://scihub.copernicus.eu/dhus")
+
+# Define area of interest (GeoJSON or WKT)
+area = geojson_to_wkt("path/to/area_of_interest.geojson")
+
+# Search for Sentinel-2 products
+products = api.query(
+    area,
+    date=("2024-01-01", "2024-12-31"),
+    platformname="Sentinel-2",
+    cloudcoverpercentage=(0, 10),
+    producttype="S2MSI2A"  # Level-2A products
+)
+
+# Download products
+for product_id, product_info in products.items():
+    api.download(product_id)
+
+
+## To fetch historical weather data in bulk, using OpenWeatherMap's One Call API
+
+import requests
+import pandas as pd
+
+# OpenWeatherMap API key
+api_key = "your_api_key"
+
+# Function to fetch historical data
+def fetch_weather(lat, lon, start, end):
+    url = f"https://api.openweathermap.org/data/2.5/onecall/timemachine"
+    all_data = []
+    for dt in range(start, end, 86400):  # Iterate daily
+        params = {
+            "lat": lat,
+            "lon": lon,
+            "dt": dt,
+            "appid": api_key,
+            "units": "metric"
+        }
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            all_data.extend(data["hourly"])
+    return pd.DataFrame(all_data)
+
+# Example usage
+latitude, longitude = -25.7459, 28.1878
+start_date = 1672531200  # Replace with UNIX timestamp for start date
+end_date = 1672617600    # Replace with UNIX timestamp for end date
+weather_df = fetch_weather(latitude, longitude, start_date, end_date)
+
+# Save to CSV
+weather_df.to_csv("historical_weather.csv", index=False)
+
+
+### to fetch timestamps
+import datetime
+print(int(datetime.datetime(2024, 1, 1).timestamp()))
